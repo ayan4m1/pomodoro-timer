@@ -53,7 +53,7 @@ void load_state() {
   }
 }
 
-void enter_deep_sleep() {
+void enter_deep_sleep(uint32_t started) {
   save_state();
   M5.Lcd.setBrightness(0);
   rtc_gpio_init(GPIO_NUM_11);
@@ -62,7 +62,7 @@ void enter_deep_sleep() {
   rtc_gpio_init(GPIO_NUM_12);
   rtc_gpio_pullup_en(GPIO_NUM_12);
   rtc_gpio_pulldown_dis(GPIO_NUM_12);
-  esp_sleep_enable_timer_wakeup(SLEEP_INTERVAL_US);
+  esp_sleep_enable_timer_wakeup(SLEEP_INTERVAL_US - (M5.micros() - started));
   esp_sleep_enable_ext1_wakeup((1ULL << GPIO_NUM_11) | (1ULL << GPIO_NUM_12),
                                ESP_EXT1_WAKEUP_ANY_LOW);
   esp_deep_sleep_start();
@@ -171,7 +171,7 @@ void timer_task(void* args) {
         (M5.millis() - last_active <= IDLE_TIMEOUT_MS) || state.timer_elapsed;
 
     if (!backlight_enabled) {
-      enter_deep_sleep();
+      enter_deep_sleep(started * 1e3);
     }
 
     uint32_t elapsed = M5.millis() - started;
@@ -183,6 +183,8 @@ void timer_task(void* args) {
 }
 
 extern "C" void app_main() {
+  uint32_t started = M5.micros();
+
   M5.begin();
   M5.Lcd.setRotation(1);
   M5.Lcd.setBrightness(0);
@@ -210,7 +212,7 @@ extern "C" void app_main() {
     }
     // timer not elapsed: save and go back to sleep
     if (!state.timer_elapsed) {
-      enter_deep_sleep();
+      enter_deep_sleep(started);
     }
     // timer elapsed: set last_active so the idle timeout works correctly
     M5.Lcd.clearDisplay(TFT_RED);
