@@ -157,8 +157,6 @@ void timer_task(void* args) {
 
     bool was_elapsed = state.timer_elapsed;
 
-    poll_input();
-
     if (state.timer_running) {
       tick_timer();
     }
@@ -177,6 +175,16 @@ void timer_task(void* args) {
     uint32_t elapsed = M5.millis() - started;
 
     vTaskDelay(pdMS_TO_TICKS(SLEEP_INTERVAL_MS - elapsed));
+  }
+
+  vTaskDelete(NULL);
+}
+
+void input_task(void* args) {
+  while (true) {
+    poll_input();
+
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 
   vTaskDelete(NULL);
@@ -213,10 +221,11 @@ extern "C" void app_main() {
     // timer not elapsed: save and go back to sleep
     if (!state.timer_elapsed) {
       enter_deep_sleep(started);
+    } else {
+      // timer elapsed: set last_active so the idle timeout works correctly
+      M5.Lcd.clearDisplay(TFT_RED);
+      last_active = M5.millis();
     }
-    // timer elapsed: set last_active so the idle timeout works correctly
-    M5.Lcd.clearDisplay(TFT_RED);
-    last_active = M5.millis();
   } else if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT1) {
     // button press woke the device: turn screen on
     last_active = M5.millis();
@@ -226,4 +235,5 @@ extern "C" void app_main() {
   xTaskCreatePinnedToCore(timer_task, "timer", 4096, nullptr, 10, nullptr, 1);
   xTaskCreatePinnedToCore(drawing_task, "drawing", 4096, nullptr, 10, nullptr,
                           0);
+  xTaskCreate(input_task, "input", 4096, nullptr, 11, nullptr);
 }
